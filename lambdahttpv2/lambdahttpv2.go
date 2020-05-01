@@ -82,24 +82,15 @@ func (w *ResponseWriter) WriteHeader(statusCode int) {
 
 func (w *ResponseWriter) Response() events.APIGatewayProxyResponse {
 	headers := make(map[string]string)
-
-	resp := events.APIGatewayProxyResponse{
-		StatusCode:        w.statusCode,
-		MultiValueHeaders: w.header,
+	for k, vals := range w.header {
+		headers[k] = strings.Join(vals, ",")
 	}
 
-	contentType := headers["Content-Type"]
-
-	isText := strings.HasPrefix(contentType, "text") ||
-		strings.HasPrefix(contentType, "application/json") ||
-		strings.HasPrefix(contentType, "application/javascript")
-
-	if isText {
-		resp.Body = w.b.String()
-	} else {
-		resp.IsBase64Encoded = true
-		resp.Body = base64.StdEncoding.EncodeToString(w.b.Bytes())
+	return events.APIGatewayProxyResponse{
+		StatusCode:      w.statusCode,
+		Headers:         headers,
+		IsBase64Encoded: true,
+		Body:            base64.StdEncoding.EncodeToString(w.b.Bytes()),
+		// MultiValueHeaders isn't respected for v2
 	}
-
-	return resp
 }
