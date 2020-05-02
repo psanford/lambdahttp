@@ -14,8 +14,13 @@ import (
 
 type LambdaHandler func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error)
 
+var DebugRequest func(req events.APIGatewayV2HTTPRequest)
+
 func NewLambdaHandler(h http.Handler) LambdaHandler {
 	return func(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
+		if DebugRequest != nil {
+			DebugRequest(req)
+		}
 		w := newRespsonseWriter()
 		r := newRequest(req)
 
@@ -56,6 +61,10 @@ func newRequest(req events.APIGatewayV2HTTPRequest) *http.Request {
 
 	for k, v := range req.Headers {
 		httpReq.Header.Set(k, v)
+	}
+
+	for _, cookie := range req.Cookies {
+		httpReq.Header.Add("cookie", cookie)
 	}
 
 	httpReq.RemoteAddr = req.RequestContext.HTTP.SourceIP
