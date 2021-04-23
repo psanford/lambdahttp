@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 )
 
 type LambdaHandler func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error)
@@ -22,7 +23,7 @@ func NewLambdaHandler(h http.Handler) LambdaHandler {
 			DebugRequest(req)
 		}
 		w := newRespsonseWriter()
-		r := newRequest(req)
+		r := newRequest(ctx, req)
 
 		h.ServeHTTP(w, r)
 
@@ -39,7 +40,7 @@ func newRespsonseWriter() *ResponseWriter {
 	}
 }
 
-func newRequest(req events.APIGatewayV2HTTPRequest) *http.Request {
+func newRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) *http.Request {
 	u := url.URL{
 		Host:     req.Headers["Host"],
 		Scheme:   req.Headers["X-Forwarded-Proto"],
@@ -54,7 +55,7 @@ func newRequest(req events.APIGatewayV2HTTPRequest) *http.Request {
 
 	method := req.RequestContext.HTTP.Method
 
-	httpReq, err := http.NewRequest(method, u.String(), bodyReader)
+	httpReq, err := http.NewRequestWithContext(ctx, method, u.String(), bodyReader)
 	if err != nil {
 		panic(err)
 	}
@@ -62,6 +63,10 @@ func newRequest(req events.APIGatewayV2HTTPRequest) *http.Request {
 	for k, v := range req.Headers {
 		httpReq.Header.Set(k, v)
 	}
+
+	lc, _ := lambdacontext.FromContext(ctx)
+	httpReq.Header.Set("X-LambdaHttp-Aws-Request-Id", lc.AwsRequestID)
+	httpReq.Header.Set("X-LambdaHttp-Function-Arn", lc.InvokedFunctionArn)
 
 	for _, cookie := range req.Cookies {
 		httpReq.Header.Add("cookie", cookie)
