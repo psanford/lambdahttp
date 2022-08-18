@@ -15,13 +15,8 @@ import (
 
 type LambdaHandler func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error)
 
-var DebugRequest func(req events.APIGatewayV2HTTPRequest)
-
 func NewLambdaHandler(h http.Handler) LambdaHandler {
 	return func(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
-		if DebugRequest != nil {
-			DebugRequest(req)
-		}
 		w := newRespsonseWriter()
 		r := newRequest(ctx, req)
 
@@ -55,6 +50,7 @@ func newRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) *http.R
 
 	method := req.RequestContext.HTTP.Method
 
+	ctx = withAPIGWv2ReqContext(ctx, req)
 	httpReq, err := http.NewRequestWithContext(ctx, method, u.String(), bodyReader)
 	if err != nil {
 		panic(err)
@@ -107,4 +103,22 @@ func (w *ResponseWriter) Response() events.APIGatewayProxyResponse {
 		Body:            base64.StdEncoding.EncodeToString(w.b.Bytes()),
 		// MultiValueHeaders isn't respected for v2
 	}
+}
+
+type ctxKey string
+
+var (
+	apiReqContextKey = ctxKey("apigwv2_req")
+)
+
+func APIGWv2ReqFromContext(ctx context.Context) events.APIGatewayV2HTTPRequest {
+	reqI := ctx.Value(apiReqContextKey)
+	if reqI == nil {
+		return events.APIGatewayV2HTTPRequest{}
+	}
+	return reqI.(events.APIGatewayV2HTTPRequest)
+}
+
+func withAPIGWv2ReqContext(ctx context.Context, req events.APIGatewayV2HTTPRequest) context.Context {
+	return context.WithValue(ctx, apiReqContextKey, req)
 }
