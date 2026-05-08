@@ -13,10 +13,10 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 )
 
-type LambdaHandler func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error)
+type LambdaHandler func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error)
 
 func NewLambdaHandler(h http.Handler) LambdaHandler {
-	return func(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
+	return func(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 		w := newRespsonseWriter()
 		r := newRequest(ctx, req)
 
@@ -90,18 +90,28 @@ func (w *ResponseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 }
 
-func (w *ResponseWriter) Response() events.APIGatewayProxyResponse {
+func (w *ResponseWriter) Response() events.APIGatewayV2HTTPResponse {
+	// Set-Cookie can appear multiple times on a response and must NOT be
+	// comma-joined: cookie syntax allows commas inside attributes like
+	// Expires, so joining produces ambiguous values that browsers and the
+	// API Gateway v2.0 payload format both reject. Cookies live in their
+	// own field; everything else can stay in Headers, joined.
 	headers := make(map[string]string)
+	var cookies []string
 	for k, vals := range w.header {
+		if http.CanonicalHeaderKey(k) == "Set-Cookie" {
+			cookies = append(cookies, vals...)
+			continue
+		}
 		headers[k] = strings.Join(vals, ",")
 	}
 
-	return events.APIGatewayProxyResponse{
+	return events.APIGatewayV2HTTPResponse{
 		StatusCode:      w.statusCode,
 		Headers:         headers,
+		Cookies:         cookies,
 		IsBase64Encoded: true,
 		Body:            base64.StdEncoding.EncodeToString(w.b.Bytes()),
-		// MultiValueHeaders isn't respected for v2
 	}
 }
 
